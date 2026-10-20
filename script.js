@@ -243,6 +243,123 @@ function removeMessage(id) {
   if (messageList.children.length === 0) showEmptyState();
 }
 
+function showBotMessage(content, userId) {
+  if (currentUser?.id !== userId) return;
+
+  messageList.querySelector(".empty")?.remove();
+  const item = document.createElement("li");
+  item.className = "message bot";
+
+  const author = document.createElement("span");
+  author.className = "author";
+  author.textContent = "Weather bot";
+
+  const text = document.createElement("p");
+  text.textContent = content;
+
+  const time = document.createElement("time");
+  const createdAt = new Date();
+  time.dateTime = createdAt.toISOString();
+  time.textContent = createdAt.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  item.append(author, text, time);
+  messageList.appendChild(item);
+  messageList.scrollTop = messageList.scrollHeight;
+}
+
+function weatherDescription(code) {
+  if (code === 0) return "clear sky";
+  if (code === 1) return "mostly clear";
+  if (code === 2) return "partly cloudy";
+  if (code === 3) return "overcast";
+  if ([45, 48].includes(code)) return "fog";
+  if ([51, 53, 55, 56, 57].includes(code)) return "drizzle";
+  if ([61, 63, 65, 66, 67].includes(code)) return "rain";
+  if ([71, 73, 75, 77].includes(code)) return "snow";
+  if ([80, 81, 82].includes(code)) return "rain showers";
+  if ([85, 86].includes(code)) return "snow showers";
+  if ([95, 96, 99].includes(code)) return "thunderstorm";
+  return "unknown conditions";
+}
+
+async function replyWithWeather(city, userId) {
+  try {
+    const geocodingUrl = new URL(
+      "https://geocoding-api.open-meteo.com/v1/search"
+    );
+    geocodingUrl.search = new URLSearchParams({
+      name: city,
+      count: "1",
+      language: "en",
+      format: "json",
+    });
+    const geocodingResponse = await fetch(geocodingUrl);
+    if (!geocodingResponse.ok) {
+      throw new Error(
+        `Location lookup failed (HTTP ${geocodingResponse.status}).`
+      );
+    }
+
+    const geocodingData = await geocodingResponse.json();
+    const location = geocodingData.results?.[0];
+    if (!location) {
+      showBotMessage(`I couldn't find "${city}". Try a nearby city name.`, userId);
+      return;
+    }
+
+    const forecastUrl = new URL("https://api.open-meteo.com/v1/forecast");
+    forecastUrl.search = new URLSearchParams({
+      latitude: String(location.latitude),
+      longitude: String(location.longitude),
+      current:
+        "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m",
+      timezone: "auto",
+    });
+    const forecastResponse = await fetch(forecastUrl);
+    if (!forecastResponse.ok) {
+      throw new Error(`Weather lookup failed (HTTP ${forecastResponse.status}).`);
+    }
+
+    const forecastData = await forecastResponse.json();
+    const current = forecastData.current;
+    if (!current || typeof current.temperature_2m !== "number") {
+      throw new Error("The weather service returned incomplete data.");
+    }
+
+    const place = [location.name, location.admin1, location.country]
+      .filter(Boolean)
+      .filter((part, index, parts) => parts.indexOf(part) === index)
+      .join(", ");
+    const feelsLike =
+      typeof current.apparent_temperature === "number"
+        ? `, feels like ${Math.round(current.apparent_temperature)}°C`
+        : "";
+    const humidity =
+      typeof current.relative_humidity_2m === "number"
+        ? `, humidity ${current.relative_humidity_2m}%`
+        : "";
+    const wind =
+      typeof current.wind_speed_10m === "number"
+        ? `, wind ${Math.round(current.wind_speed_10m)} km/h`
+        : "";
+
+    showBotMessage(
+      `Current weather in ${place}: ${weatherDescription(
+        current.weather_code
+      )}, ${Math.round(current.temperature_2m)}°C${feelsLike}${humidity}${wind}.`,
+      userId
+    );
+  } catch (error) {
+    showBotMessage(
+      `I couldn't get the weather: ${errorMessage(error, "Unknown error.")}`,
+      userId
+    );
+  }
+}
+
 function startChat(user) {
   if (!sb || !user || currentUser?.id === user.id) return;
 
@@ -372,6 +489,12 @@ messageForm.addEventListener("submit", async (event) => {
     if (currentUser?.id !== submittedUserId) return;
     if (messageInput.value.trim() === submittedContent) messageInput.value = "";
     showMessage(data);
+    const weatherRequest = submittedContent.match(
+      /^(?:!weather|\/weather|weather(?:\s+in)?)\s+(.+)$/i
+    );
+    if (weatherRequest) {
+      void replyWithWeather(weatherRequest[1].trim(), submittedUserId);
+    }
   } catch (error) {
     chatStatus.textContent =
       `Could not send: ${errorMessage(error, "Unknown error.")}`;

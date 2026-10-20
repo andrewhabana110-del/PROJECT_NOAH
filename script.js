@@ -542,7 +542,7 @@ messageForm.addEventListener("submit", async (event) => {
     if (messageInput.value.trim() === submittedContent) messageInput.value = "";
     showMessage(data);
     const weatherRequest = submittedContent.match(
-      /^(?:!weather|\/weather|weather(?:\s+in)?)\s+(.+)$/i
+      /^\/weather\s+(.+)$/i
     );
     if (weatherRequest) {
       void replyWithWeather(weatherRequest[1].trim(), submittedUserId);

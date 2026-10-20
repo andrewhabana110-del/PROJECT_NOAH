@@ -33,18 +33,26 @@ const configIsPresent =
   !SUPABASE_KEY.includes("PASTE-");
 
 let sb = null;
-if (configIsPresent && typeof supabase !== "undefined") {
+let authSetupError = "";
+if (!configIsPresent) {
+  authSetupError =
+    "Configure SUPABASE_URL and SUPABASE_KEY in script.js to connect this app.";
+} else if (typeof supabase === "undefined") {
+  authSetupError =
+    "The Supabase library did not load. Check your internet connection and reload.";
+} else {
   try {
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   } catch (error) {
-    authMessage.textContent = `Invalid Supabase configuration: ${error.message}`;
+    authSetupError = `Could not initialize Supabase: ${errorMessage(
+      error,
+      "Check the project URL and publishable key."
+    )}`;
   }
 }
 
-if (!configIsPresent || !sb) {
-  authMessage.textContent = configIsPresent
-    ? "The Supabase client could not be loaded. Check your internet connection and reload."
-    : "Configure SUPABASE_URL and SUPABASE_KEY in script.js to connect this app.";
+if (!sb) {
+  authMessage.textContent = authSetupError;
   loginButton.disabled = true;
   signupButton.disabled = true;
 }
@@ -57,6 +65,13 @@ function setAuthBusy(busy) {
 
 function errorMessage(error, fallback) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function authErrorMessage(error) {
+  const message = errorMessage(error, "Authentication failed.");
+  return /email.*(disabled|not enabled)|(disabled|not enabled).*email/i.test(message)
+    ? `${message} Enable the Email provider in Supabase Dashboard > Authentication > Sign In / Providers.`
+    : message;
 }
 
 async function signUp() {
@@ -78,7 +93,7 @@ async function signUp() {
     });
 
     if (error) {
-      authMessage.textContent = error.message;
+      authMessage.textContent = authErrorMessage(error);
     } else if (!data.session) {
       authMessage.textContent =
         "Account created, but email confirmation is enabled. Disable Confirm email in Supabase Authentication settings to sign in immediately.";
@@ -101,7 +116,7 @@ async function logIn() {
       email: emailInput.value.trim(),
       password: passwordInput.value,
     });
-    authMessage.textContent = error ? error.message : "";
+    authMessage.textContent = error ? authErrorMessage(error) : "";
   } catch (error) {
     authMessage.textContent = errorMessage(error, "Could not log in.");
   } finally {

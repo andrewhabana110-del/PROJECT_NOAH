@@ -154,6 +154,21 @@ body {
   line-height: 1.4;
 }
 
+.delete-message {
+  min-height: 28px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.delete-message:hover:not(:disabled) {
+  background: rgb(255 255 255 / 16%);
+}
+
 .message time {
   display: block;
   margin-top: 4px;

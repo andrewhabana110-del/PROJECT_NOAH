@@ -193,7 +193,17 @@ function showMessage(message) {
     });
   }
 
-  item.append(author, text, time);
+  item.append(author, text);
+  if (message.user_id === currentUser.id) {
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "delete-message";
+    deleteButton.dataset.deleteMessageId = String(message.id);
+    deleteButton.setAttribute("aria-label", "Delete this message");
+    deleteButton.textContent = "Delete";
+    item.append(deleteButton);
+  }
+  item.append(time);
   const nextMessage = Array.from(messageList.children).find(
     (existing) =>
       existing.dataset.id &&
@@ -242,6 +252,48 @@ function removeMessage(id) {
   findMessage(id)?.remove();
   if (messageList.children.length === 0) showEmptyState();
 }
+
+async function deleteMessage(id, userId, button) {
+  if (!sb || currentUser?.id !== userId || button.disabled) return;
+
+  button.disabled = true;
+  chatStatus.textContent = "";
+  try {
+    const { data, error } = await sb
+      .from("messages")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("id")
+      .maybeSingle();
+
+    if (currentUser?.id !== userId) return;
+    if (error) throw error;
+    if (!data) {
+      chatStatus.textContent =
+        "Message was not deleted. It may already be gone, or your account may not have permission to delete it.";
+      return;
+    }
+    removeMessage(id);
+  } catch (error) {
+    if (currentUser?.id === userId) {
+      chatStatus.textContent =
+        `Could not delete message: ${errorMessage(error, "Unknown error.")}`;
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+messageList.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const button = target.closest("[data-delete-message-id]");
+  const userId = currentUser?.id;
+  if (button && userId) {
+    void deleteMessage(button.dataset.deleteMessageId, userId, button);
+  }
+});
 
 function showBotMessage(content, userId) {
   if (currentUser?.id !== userId) return;
